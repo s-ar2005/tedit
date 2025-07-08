@@ -1,6 +1,8 @@
 import curses
 import os
 import re
+import importlib.util
+import glob
 
 class Renderer:
     def __init__(self, stdscr):
@@ -14,6 +16,20 @@ class Renderer:
         self.cwd = os.getcwd()
         self.refresh_files()
         self.show_line_numbers = True
+        self.external_highlighters = {}
+        config_dir = os.path.expanduser("~/.config/tedit")
+        if os.path.isdir(config_dir):
+            for path in glob.glob(os.path.join(config_dir, "*.py")):
+                ext = os.path.splitext(os.path.basename(path))[0]
+                spec = importlib.util.spec_from_file_location(f"tedit_{ext}", path)
+                if spec is not None and spec.loader is not None:
+                    mod = importlib.util.module_from_spec(spec)
+                    try:
+                        spec.loader.exec_module(mod)
+                        if hasattr(mod, "highlight_line"):
+                            self.external_highlighters[ext] = mod.highlight_line
+                    except Exception:
+                        pass
 
     def set_theme(self, theme):
         self.theme = theme
@@ -51,11 +67,19 @@ class Renderer:
         self.show_line_numbers = not self.show_line_numbers
 
     def highlight_line(self, line, filetype):
+        ext = None
+        if filetype:
+            ext = os.path.splitext(filetype)[-1].lstrip('.')
+        if ext and ext in self.external_highlighters:
+            try:
+                return self.external_highlighters[ext](line, filetype)
+            except Exception:
+                pass
         if filetype and filetype.endswith('.py'):
             keywords = r'\b(def|class|import|from|as|if|elif|else|for|while|try|except|with|return|yield|in|is|not|and|or|pass|break|continue|lambda|True|False|None)\b'
             line = re.sub(keywords, lambda m: f'\x01{m.group(0)}\x02', line)
             line = re.sub(r'#[^\n]*', lambda m: f'\x03{m.group(0)}\x02', line)
-            line = re.sub(r'("[^"]*"|\'[^"]*\')', lambda m: f'\x04{m.group(0)}\x02', line)
+            line = re.sub(r'("[^"]*"|\'[^\"]*\')', lambda m: f'\x04{m.group(0)}\x02', line)
         elif filetype and (filetype.endswith('.md') or filetype.endswith('.markdown')):
             line = re.sub(r'^(#+)(.*)', lambda m: f'\x01{m.group(1)}{m.group(2)}\x02', line)
             line = re.sub(r'\*\*([^*]+)\*\*', lambda m: f'\x04{m.group(0)}\x02', line)

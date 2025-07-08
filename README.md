@@ -152,6 +152,38 @@ Example `~/.config/tedit.json`:
 
 ---
 
+## External Syntax Highlighting
+
+You can add your own syntax highlighting for any file extension by placing a Python file in `~/.config/tedit/` named after the extension. For example:
+
+- `py.py` for Python files
+- `js.py` for JavaScript files
+- `sh.py` for shell scripts
+- `md.py` for Markdown files
+
+Each file should define a function:
+
+```python
+def highlight_line(line, filetype):
+    # Return the highlighted line using \x01...\x02 for keywords, \x03...\x02 for comments, \x04...\x02 for strings
+    return line
+```
+
+**Example for `~/.config/tedit/sh.py`:**
+```python
+def highlight_line(line, filetype):
+    import re
+    keywords = r'\b(if|then|else|elif|fi|for|while|do|done|in|case|esac|function|select|until|break|continue|return|exit|export|local|readonly|declare|typeset|let|eval|exec|set|unset|shift|test)\b'
+    line = re.sub(keywords, lambda m: '\x01' + m.group(0) + '\x02', line)
+    line = re.sub(r'#.*', lambda m: '\x03' + m.group(0) + '\x02', line)
+    line = re.sub(r'("[^"]*"|\'[^"]*\')', lambda m: '\x04' + m.group(0) + '\x02', line)
+    return line
+```
+
+The editor will use the highlighter matching the file's extension. If no custom highlighter is found, the built-in one is used.
+
+---
+
 ## Roadmap
 
 - ~~Configurable keybindings~~
