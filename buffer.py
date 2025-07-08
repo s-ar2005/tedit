@@ -1,12 +1,13 @@
 import os
 
 class Buffer:
-    def __init__(self, filename=None):
+    def __init__(self, filename=None, read_only=False):
         self.filename = filename
         self.lines = [""]
         self.clipboard = ""
         self.undo_stack = []
         self.redo_stack = []
+        self.read_only = read_only
         
         if filename and os.path.exists(filename):
             with open(filename, "r") as f:
@@ -118,9 +119,46 @@ class Buffer:
                 return y, x
         return None, None
         
+    def search_next(self, query, cy, cx):
+        for y in range(cy, len(self.lines)):
+            start = cx+1 if y == cy else 0
+            x = self.lines[y].find(query, start)
+            if x >= 0:
+                return y, x
+        for y in range(0, cy):
+            x = self.lines[y].find(query)
+            if x >= 0:
+                return y, x
+        return None, None
+
+    def search_prev(self, query, cy, cx):
+        for y in range(cy, -1, -1):
+            end = cx-1 if y == cy else len(self.lines)
+            x = self.lines[y].rfind(query, 0, end)
+            if x >= 0:
+                return y, x
+        for y in range(len(self.lines)-1, cy, -1):
+            x = self.lines[y].rfind(query)
+            if x >= 0:
+                return y, x
+        return None, None
+
+    def get_history(self):
+        return self.undo_stack, self.redo_stack
+        
     def save_file(self):
         if self.filename:
             with open(self.filename, "w") as f:
                 f.write("\n".join(self.lines))
             return True
         return False
+
+    def replace_all(self, search, replace):
+        self.save_undo()
+        count = 0
+        for i, line in enumerate(self.lines):
+            new_line, n = line.replace(search, replace), line.count(search)
+            if n > 0:
+                self.lines[i] = new_line
+                count += n
+        return count

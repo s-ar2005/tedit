@@ -5,6 +5,7 @@ class Cursor:
         self.cy = 0
         self.scroll = 0
         self.visual_start = None
+        self.marks = {}
         
     def fix_cursor(self):
         if self.cy < 0:
