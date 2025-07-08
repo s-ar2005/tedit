@@ -69,15 +69,19 @@ class Renderer:
         num_width = 5 if self.show_line_numbers else 0
         minimap_width = 8
         text_width = width - sidebar_width - minimap_width
+        visual_range = None
+        if mode == "VISUAL" and cursor.visual_start is not None:
+            visual_range = cursor.get_visual_range()
         self._draw_buffer(
             buffer, cursor, mode, msg, buf_idx, buf_count,
             sidebar_width, num_width, minimap_width, 0, text_width, height,
             split=False, focused=True,
-            draw_sidebar=self.sidebar, draw_minimap=True, draw_status=True, draw_cursor=True
+            draw_sidebar=self.sidebar, draw_minimap=True, draw_status=True, draw_cursor=True,
+            visual_range=visual_range
         )
         self.stdscr.refresh()
 
-    def _draw_buffer(self, buffer, cursor, mode, msg, buf_idx, buf_count, sidebar_width, num_width, minimap_width, y_offset, text_width, height, split=False, focused=False, draw_sidebar=False, draw_minimap=False, draw_status=False, draw_cursor=False):
+    def _draw_buffer(self, buffer, cursor, mode, msg, buf_idx, buf_count, sidebar_width, num_width, minimap_width, y_offset, text_width, height, split=False, focused=False, draw_sidebar=False, draw_minimap=False, draw_status=False, draw_cursor=False, visual_range=None):
         maxy, maxx = self.stdscr.getmaxyx()
         width = maxx
         if draw_sidebar:
@@ -110,8 +114,19 @@ class Renderer:
                     self.stdscr.addstr(i - cursor.scroll + y_offset, wrap_col, chunk, color)
                     wrap_col += 1
             else:
+                vis_y1 = vis_x1 = vis_y2 = vis_x2 = None
+                if visual_range is not None:
+                    vis_y1, vis_x1, vis_y2, vis_x2 = visual_range
                 while idx < len(hline) and col < sidebar_width + text_width:
                     ch = hline[idx]
+                    highlight = False
+                    if (vis_y1 is not None and vis_x1 is not None and vis_y2 is not None and vis_x2 is not None):
+                        if vis_y1 == vis_y2:
+                            if i == vis_y1 and vis_x1 <= idx <= vis_x2:
+                                highlight = True
+                        else:
+                            if (i == vis_y1 and idx >= vis_x1) or (i == vis_y2 and idx <= vis_x2) or (vis_y1 < i < vis_y2):
+                                highlight = True
                     if ch == '\x01':
                         color = curses.color_pair(2)
                     elif ch == '\x03':
@@ -121,7 +136,8 @@ class Renderer:
                     elif ch == '\x02':
                         color = curses.color_pair(1)
                     else:
-                        self.stdscr.addstr(i - cursor.scroll + y_offset, col, ch, color)
+                        draw_color = curses.color_pair(5) if highlight else color
+                        self.stdscr.addstr(i - cursor.scroll + y_offset, col, ch, draw_color)
                         col += 1
                     idx += 1
         if draw_minimap:

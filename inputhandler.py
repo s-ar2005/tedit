@@ -229,26 +229,37 @@ class InputHandler:
                 self.cursor.cy = y1
                 self.cursor.cx = x1
                 self.cursor.visual_start = None
+                self.mode = "NORMAL"
                 if y1 == y2:
-                    self.msg = f"Cut {x2-x1+1} chars"
+                    self.msg = f"Cut {abs(x2-x1)+1} chars"
                 else:
-                    self.msg = f"Cut {y2-y1+1} lines"
+                    self.msg = f"Cut {abs(y2-y1)+1} lines"
         elif k == ord("y"):
             vr = self.cursor.get_visual_range()
             if vr:
                 y1, x1, y2, x2 = vr
                 self.buffer.clipboard = self.buffer.get_visual_clipboard(y1, x1, y2, x2)
+                self.cursor.visual_start = None
+                self.mode = "NORMAL"
                 if y1 == y2:
-                    self.msg = f"Yanked {x2-x1+1} chars"
+                    self.msg = f"Yanked {abs(x2-x1)+1} chars"
                 else:
-                    self.msg = f"Yanked {y2-y1+1} lines"
+                    self.msg = f"Yanked {abs(y2-y1)+1} lines"
         elif k == ord("p"):
-            clip = self.buffer.clipboard
-            if clip:
-                lines = clip.split('\n')
-                for idx, line in enumerate(lines):
-                    self.buffer.lines.insert(self.cursor.cy + idx, line)
-                self.msg = "Pasted clipboard"
+            vr = self.cursor.get_visual_range()
+            if vr:
+                y1, x1, y2, x2 = vr
+                self.buffer.delete_visual(y1, x1, y2, x2)
+                self.cursor.cy = y1
+                self.cursor.cx = x1
+                clip = self.buffer.clipboard
+                if clip:
+                    lines = clip.split('\n')
+                    for idx, line in enumerate(lines):
+                        self.buffer.lines.insert(self.cursor.cy + idx, line)
+                    self.msg = "Pasted clipboard"
+                self.cursor.visual_start = None
+                self.mode = "NORMAL"
         elif k == ord("h") or k == curses.KEY_LEFT:
             self.cursor.move_cursor(0, -1)
         elif k == ord("l") or k == curses.KEY_RIGHT:

@@ -88,6 +88,8 @@ class Buffer:
         
     def delete_visual(self, y1, x1, y2, x2):
         self.save_undo()
+        if (y1, x1) > (y2, x2):
+            y1, x1, y2, x2 = y2, x2, y1, x1
         if y1 == y2:
             line = self.lines[y1]
             self.clipboard = line[x1:x2 + 1]
@@ -103,6 +105,8 @@ class Buffer:
                 self.lines.pop(_)
                 
     def get_visual_clipboard(self, y1, x1, y2, x2):
+        if (y1, x1) > (y2, x2):
+            y1, x1, y2, x2 = y2, x2, y1, x1
         if y1 == y2:
             return self.lines[y1][x1:x2 + 1]
         else:
