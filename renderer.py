@@ -92,7 +92,7 @@ class Renderer:
         sidebar_width = 20 if self.sidebar else 0
         num_width = 5 if self.show_line_numbers else 0
         minimap_width = 8
-        text_width = width - sidebar_width - minimap_width
+        text_width = width - sidebar_width - minimap_width - num_width
         visual_range = None
         if mode == "VISUAL" and cursor.visual_start is not None:
             visual_range = cursor.get_visual_range()
@@ -141,7 +141,11 @@ class Renderer:
                 vis_y1 = vis_x1 = vis_y2 = vis_x2 = None
                 if visual_range is not None:
                     vis_y1, vis_x1, vis_y2, vis_x2 = visual_range
-                while idx < len(hline) and col < sidebar_width + text_width:
+                line_start = cursor.scroll_x
+                line_end = cursor.scroll_x + text_width - 1
+                idx = line_start
+                col_offset = col
+                while idx < len(hline) and idx <= line_end:
                     ch = hline[idx]
                     highlight = False
                     if (vis_y1 is not None and vis_x1 is not None and vis_y2 is not None and vis_x2 is not None):
@@ -161,9 +165,14 @@ class Renderer:
                         color = curses.color_pair(1)
                     else:
                         draw_color = curses.color_pair(5) if highlight else color
-                        self.stdscr.addstr(i - cursor.scroll + y_offset, col, ch, draw_color)
-                        col += 1
+                        self.stdscr.addstr(i - cursor.scroll + y_offset, col_offset, ch, draw_color)
+                        col_offset += 1
                     idx += 1
+            if i == cursor.cy:
+                if cursor.cx < cursor.scroll_x:
+                    cursor.scroll_x = cursor.cx
+                elif cursor.cx >= cursor.scroll_x + text_width:
+                    cursor.scroll_x = cursor.cx - text_width + 1
         if draw_minimap:
             minmap_x = width - minimap_width
             total_lines = len(buffer.lines)
@@ -177,7 +186,7 @@ class Renderer:
             status = f" {mode} | {modified}{buffer.filename or '[No Name]'} | Ln {cursor.cy + 1}, Col {cursor.cx + 1} | Buf {buf_idx+1}/{buf_count} {msg}"
             self.stdscr.addstr(maxy - 1, 0, status[:maxx - 1], curses.color_pair(3))
         if draw_cursor and focused:
-            self.stdscr.move(cursor.cy - cursor.scroll + y_offset, sidebar_width + (num_width if self.show_line_numbers else 0) + cursor.cx)
+            self.stdscr.move(cursor.cy - cursor.scroll + y_offset, sidebar_width + (num_width if self.show_line_numbers else 0) + (cursor.cx - cursor.scroll_x))
 
     def draw_split(self, buffers, cursors, modes, msgs, split_mode, split_focus, split_buffers, buf_count):
         self.stdscr.clear()
@@ -186,8 +195,8 @@ class Renderer:
         num_width = 5 if self.show_line_numbers else 0
         minimap_width = 8
         if split_mode == 'vsplit':
-            width1 = (maxx - sidebar_width - minimap_width) // 2
-            width2 = (maxx - sidebar_width - minimap_width) - width1
+            width1 = (maxx - sidebar_width - minimap_width - num_width) // 2
+            width2 = (maxx - sidebar_width - minimap_width - num_width) - width1
             text_width1 = width1
             text_width2 = width2
             height = maxy - 1

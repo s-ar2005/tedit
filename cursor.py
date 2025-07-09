@@ -4,6 +4,7 @@ class Cursor:
         self.cx = 0
         self.cy = 0
         self.scroll = 0
+        self.scroll_x = 0
         self.visual_start = None
         self.marks = {}
         
@@ -16,6 +17,8 @@ class Cursor:
             self.cx = 0
         if self.cx > len(self.lines[self.cy]):
             self.cx = len(self.lines[self.cy])
+        if self.cx < self.scroll_x:
+            self.scroll_x = self.cx
             
     def move_cursor(self, dy, dx):
         self.cy += dy
@@ -25,6 +28,8 @@ class Cursor:
             self.cx = len(self.lines[self.cy])
         if self.cx < 0:
             self.cx = 0
+        if self.cx < self.scroll_x:
+            self.scroll_x = self.cx
             
     def move_word_forward(self):
         line = self.lines[self.cy]
