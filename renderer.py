@@ -136,7 +136,7 @@ class Renderer:
             visible_files = self.files[self.sidebar_scroll:self.sidebar_scroll+max_visible]
             for i, fname in enumerate(visible_files):
                 idx = i + self.sidebar_scroll
-                attr = curses.color_pair(2) if idx == self.selected_file else curses.color_pair(1)
+                attr = curses.color_pair(2) if idx != self.selected_file else curses.color_pair(5)
                 if fname.endswith('/') or fname == '..':
                     attr = curses.color_pair(4) if idx != self.selected_file else curses.color_pair(5)
                 self.stdscr.addstr(i + y_offset, 0, fname[:sidebar_width-1].ljust(sidebar_width-1), attr)
@@ -158,7 +158,7 @@ class Renderer:
             color = curses.color_pair(1)
             if self.show_line_numbers:
                 num = f"{i+1:4} "
-                attr = curses.color_pair(2) if i == cursor.cy else curses.color_pair(1)
+                attr = curses.color_pair(5) if i == cursor.cy else curses.color_pair(1)
                 self.stdscr.addstr(i - cursor.scroll + y_offset, sidebar_width, num, attr)
             if self.wrap:
                 wrap_col = col
