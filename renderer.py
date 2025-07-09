@@ -13,7 +13,7 @@ class Renderer:
         self.sidebar = False
         self.files = []
         self.selected_file = 0
-        self.sidebar_scroll = 0  # <-- add this line
+        self.sidebar_scroll = 0
         self.cwd = os.getcwd()
         self.refresh_files()
         self.show_line_numbers = True

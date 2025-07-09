@@ -275,6 +275,10 @@ class Tedit:
             self.current = max(0, self.current - 1)
 
 def main():
+    import signal
+    def ignore_sigint(signum, frame):
+        pass
+    signal.signal(signal.SIGINT, ignore_sigint)
     curses.wrapper(Tedit, *sys.argv[1:])
 
 if __name__ == "__main__":

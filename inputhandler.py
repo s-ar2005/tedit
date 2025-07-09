@@ -127,7 +127,6 @@ class InputHandler:
         if self.renderer.sidebar:
             if k == curses.KEY_UP:
                 self.renderer.selected_file = max(0, self.renderer.selected_file - 1)
-                # Ensure scroll follows selection
                 if self.renderer.selected_file < self.renderer.sidebar_scroll:
                     self.renderer.sidebar_scroll = self.renderer.selected_file
                 return
@@ -141,7 +140,6 @@ class InputHandler:
             elif k in (10, 13):
                 fname = self.renderer.files[self.renderer.selected_file]
                 if fname == '..' or fname.endswith('/'):
-                    # Change directory
                     if fname == '..':
                         self.renderer.change_directory('..')
                     else:
