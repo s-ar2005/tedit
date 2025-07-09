@@ -13,6 +13,7 @@ class Renderer:
         self.sidebar = False
         self.files = []
         self.selected_file = 0
+        self.sidebar_scroll = 0  # <-- add this line
         self.cwd = os.getcwd()
         self.refresh_files()
         self.show_line_numbers = True
@@ -55,8 +56,24 @@ class Renderer:
         self.wrap = not self.wrap
 
     def refresh_files(self):
-        self.files = [f for f in os.listdir(self.cwd) if os.path.isfile(f)]
-        self.files.sort()
+        entries = os.listdir(self.cwd)
+        folders = [f for f in entries if os.path.isdir(os.path.join(self.cwd, f))]
+        files = [f for f in entries if os.path.isfile(os.path.join(self.cwd, f))]
+        folders.sort()
+        files.sort()
+        folders = [f + '/' for f in folders]
+        self.files = folders + files
+        if os.path.abspath(self.cwd) != os.path.abspath(os.sep):
+            self.files = ['..'] + self.files
+
+    def change_directory(self, new_dir):
+        if new_dir == '..':
+            parent = os.path.dirname(self.cwd)
+            self.cwd = parent
+        else:
+            self.cwd = os.path.join(self.cwd, new_dir)
+        self.selected_file = 0
+        self.refresh_files()
 
     def toggle_sidebar(self):
         self.sidebar = not self.sidebar
@@ -109,8 +126,19 @@ class Renderer:
         maxy, maxx = self.stdscr.getmaxyx()
         width = maxx
         if draw_sidebar:
-            for i, fname in enumerate(self.files[:height]):
-                attr = curses.color_pair(2) if i == self.selected_file else curses.color_pair(1)
+            total_files = len(self.files)
+            max_visible = height
+            if self.selected_file < self.sidebar_scroll:
+                self.sidebar_scroll = self.selected_file
+            elif self.selected_file >= self.sidebar_scroll + max_visible:
+                self.sidebar_scroll = self.selected_file - max_visible + 1
+            self.sidebar_scroll = max(0, min(self.sidebar_scroll, max(0, total_files - max_visible)))
+            visible_files = self.files[self.sidebar_scroll:self.sidebar_scroll+max_visible]
+            for i, fname in enumerate(visible_files):
+                idx = i + self.sidebar_scroll
+                attr = curses.color_pair(2) if idx == self.selected_file else curses.color_pair(1)
+                if fname.endswith('/') or fname == '..':
+                    attr = curses.color_pair(4) if idx != self.selected_file else curses.color_pair(5)
                 self.stdscr.addstr(i + y_offset, 0, fname[:sidebar_width-1].ljust(sidebar_width-1), attr)
             for i in range(height):
                 self.stdscr.addstr(i + y_offset, sidebar_width-1, '|', curses.color_pair(3))

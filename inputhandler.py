@@ -127,14 +127,30 @@ class InputHandler:
         if self.renderer.sidebar:
             if k == curses.KEY_UP:
                 self.renderer.selected_file = max(0, self.renderer.selected_file - 1)
+                # Ensure scroll follows selection
+                if self.renderer.selected_file < self.renderer.sidebar_scroll:
+                    self.renderer.sidebar_scroll = self.renderer.selected_file
                 return
             elif k == curses.KEY_DOWN:
                 self.renderer.selected_file = min(len(self.renderer.files) - 1, self.renderer.selected_file + 1)
+                maxy, _ = self.renderer.stdscr.getmaxyx()
+                sidebar_height = maxy - 1
+                if self.renderer.selected_file >= self.renderer.sidebar_scroll + sidebar_height:
+                    self.renderer.sidebar_scroll = self.renderer.selected_file - sidebar_height + 1
                 return
             elif k in (10, 13):
                 fname = self.renderer.files[self.renderer.selected_file]
-                self.renderer.toggle_sidebar()
-                return f":e {fname}"
+                if fname == '..' or fname.endswith('/'):
+                    # Change directory
+                    if fname == '..':
+                        self.renderer.change_directory('..')
+                    else:
+                        self.renderer.change_directory(fname.rstrip('/'))
+                    return
+                else:
+                    full_path = os.path.join(self.renderer.cwd, fname)
+                    self.renderer.toggle_sidebar()
+                    return f":e {full_path}"
         if k == ord(km["insert"]):
             self.mode = "INSERT"
         elif k == ord(km["left"]) or k == curses.KEY_LEFT:
