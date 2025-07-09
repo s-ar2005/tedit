@@ -134,9 +134,47 @@ class Renderer:
                 self.stdscr.addstr(i - cursor.scroll + y_offset, sidebar_width, num, attr)
             if self.wrap:
                 wrap_col = col
-                for chunk in [hline[j:j+text_width-num_width] for j in range(0, len(hline), text_width-num_width)]:
-                    self.stdscr.addstr(i - cursor.scroll + y_offset, wrap_col, chunk, color)
-                    wrap_col += 1
+                line_buffer = []
+                color = curses.color_pair(1)
+                curr_col = 0
+                idx = 0
+                hlen = len(hline)
+                while idx < hlen:
+                    ch = hline[idx]
+                    if ch == '\x01':
+                        color = curses.color_pair(2)
+                        idx += 1
+                        continue
+                    elif ch == '\x03':
+                        color = curses.color_pair(4)
+                        idx += 1
+                        continue
+                    elif ch == '\x04':
+                        color = curses.color_pair(3)
+                        idx += 1
+                        continue
+                    elif ch == '\x02':
+                        color = curses.color_pair(1)
+                        idx += 1
+                        continue
+                    else:
+                        line_buffer.append((ch, color))
+                        idx += 1
+                max_text_width = text_width - num_width
+                row = i - cursor.scroll + y_offset
+                col_offset = wrap_col
+                curr = 0
+                while curr < len(line_buffer):
+                    chunk = line_buffer[curr:curr+max_text_width]
+                    for j, (wch, wcolor) in enumerate(chunk):
+                        try:
+                            self.stdscr.addstr(row, col_offset + j, wch, wcolor)
+                        except curses.error:
+                            pass
+                    curr += max_text_width
+                    row += 1
+                    if row - (i - cursor.scroll + y_offset) >= height:
+                        break
             else:
                 vis_y1 = vis_x1 = vis_y2 = vis_x2 = None
                 if visual_range is not None:
