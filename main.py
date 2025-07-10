@@ -57,6 +57,10 @@ class Tedit:
         self.cursors.append(cur)
         self.input_handlers.append(handler)
         self.current = len(self.buffers) - 1
+        try:
+            handler.run_linter()
+        except Exception:
+            pass
 
     def save_session(self, name=None):
         if self.no_session:

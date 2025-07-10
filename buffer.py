@@ -8,7 +8,7 @@ class Buffer:
         self.undo_stack = []
         self.redo_stack = []
         self.read_only = read_only
-        
+        self.diagnostics = {}
         if filename and os.path.exists(filename):
             with open(filename, "r") as f:
                 self.lines = f.read().splitlines() or [""]
@@ -166,3 +166,8 @@ class Buffer:
                 self.lines[i] = new_line
                 count += n
         return count
+
+    def update_diagnostics(self, diagnostics):
+        self.diagnostics = diagnostics
+    def clear_diagnostics(self):
+        self.diagnostics = {}

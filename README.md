@@ -168,22 +168,45 @@ Each file should define a function:
 
 ```python
 def highlight_line(line, filetype):
-    # Return the highlighted line using \x01...\x02 for keywords, \x03...\x02 for comments, \x04...\x02 for strings
+    # return the highlighted line using \x01...\x02 for keywords, \x03...\x02 for comments, \x04...\x02 for strings
     return line
 ```
 
-**Example for `~/.config/tedit/sh.py`:**
+**Custom Linting via Python Files**
+
+You can also provide a custom linter for a filetype by defining a function in the same file:
+
 ```python
-def highlight_line(line, filetype):
-    import re
-    keywords = r'\b(if|then|else|elif|fi|for|while|do|done|in|case|esac|function|select|until|break|continue|return|exit|export|local|readonly|declare|typeset|let|eval|exec|set|unset|shift|test)\b'
-    line = re.sub(keywords, lambda m: '\x01' + m.group(0) + '\x02', line)
-    line = re.sub(r'#.*', lambda m: '\x03' + m.group(0) + '\x02', line)
-    line = re.sub(r'("[^"]*"|\'[^"]*\')', lambda m: '\x04' + m.group(0) + '\x02', line)
-    return line
+def lint_buffer(lines, filetype):
+    # return a dictionary: { line_number: [(diagnostic_type, message), ...], ... }
+    diagnostics = {}
+    # example: mark line 0 as error
+    diagnostics[0] = [("error", "Example error on first line")]
+    return diagnostics
 ```
 
-The editor will use the highlighter matching the file's extension. If no custom highlighter is found, the built-in one is used.
+If `lint_buffer` is present, Tedit will use it for linting that filetype. Otherwise, it falls back to the built-in or external linter command.
+
+The editor will use the highlighter and linter matching the file's extension. If no custom highlighter or linter is found, the built-in one is used.
+
+---
+
+## Linter and Diagnostics
+
+- To run linter: `:lint` in command mode.
+- Shows errors, warnings, infos and TODOs.
+- Configurable in `~/.config/tedit.json`:
+
+```
+{
+  "linter_cmd": "pylint {file}",
+  "diagnostic_symbols": {"error": "E", "warning": "W", "info": "I", "todo": "T"},
+  "diagnostic_colors": {"error": 6, "warning": 7, "info": 8, "todo": 9}
+}
+```
+- Linter output must be in the form: `file:line:col: error|warning|info: message`
+- TODO/FIXME in comments are always shown as info/warning.
+- **If a custom linter is provided in the syntax highlighter Python file (see above), it will be used for that filetype.**
 
 ---
 
@@ -193,6 +216,7 @@ The editor will use the highlighter matching the file's extension. If no custom 
 - ~~Syntax highlighting~~
 - Plugin system
 - ~~Tabs/splits?~~ (multi-buffer support)
+- ~~Linter support~~
 - Written in C version someday?
 
 ---

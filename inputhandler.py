@@ -61,6 +61,7 @@ class InputHandler:
             self.mode = "NORMAL"
         elif k in (curses.KEY_BACKSPACE, 127):
             self.cursor.cy, self.cursor.cx = self.buffer.backspace(self.cursor.cy, self.cursor.cx)
+            self.run_linter()
         elif k == 10:
             prev_line = self.buffer.lines[self.cursor.cy]
             indent = len(prev_line) - len(prev_line.lstrip(' '))
@@ -76,8 +77,10 @@ class InputHandler:
             self.cursor.cy += 1
             self.cursor.cx = indent + extra
             self.buffer.lines[self.cursor.cy] = ' ' * (indent + extra) + self.buffer.lines[self.cursor.cy]
+            self.run_linter()
         elif k == km.get("delete_key", curses.KEY_DC):
             self.buffer.delete_char(self.cursor.cy, self.cursor.cx)
+            self.run_linter()
         elif k == km.get("left", ord("h")) or k == curses.KEY_LEFT:
             self.cursor.move_cursor(0, -1)
         elif k == km.get("right", ord("l")) or k == curses.KEY_RIGHT:
@@ -98,9 +101,11 @@ class InputHandler:
             self.buffer.insert_char(ord(" "), self.cursor.cy, self.cursor.cx+2)
             self.buffer.insert_char(ord(" "), self.cursor.cy, self.cursor.cx+3)
             self.cursor.cx += 4
+            self.run_linter()
         elif 32 <= k <= 126:
             self.buffer.insert_char(k, self.cursor.cy, self.cursor.cx)
             self.cursor.cx += 1
+            self.run_linter()
         else:
             self.msg = f"Unhandled {k}"
             
@@ -188,19 +193,23 @@ class InputHandler:
                 if self.cursor.cy >= len(self.buffer.lines):
                     self.cursor.cy = len(self.buffer.lines) - 1
                 self.cursor.cx = 0
+                self.run_linter()
         elif k == ord(km["paste"]):
             self.buffer.paste(self.cursor.cy, self.cursor.cx)
             self.cursor.cx += len(self.buffer.clipboard)
+            self.run_linter()
         elif k == ord(km["undo"]):
             if self.buffer.undo():
                 self.msg = "Undo"
                 self.cursor.fix_cursor()
+                self.run_linter()
             else:
                 self.msg = "Nothing to undo"
         elif k == ord(km["redo"]):
             if self.buffer.redo():
                 self.msg = "Redo"
                 self.cursor.fix_cursor()
+                self.run_linter()
             else:
                 self.msg = "Nothing to redo"
         elif k == ord(km["search"]):
@@ -266,6 +275,7 @@ class InputHandler:
                     self.msg = f"Cut {abs(x2-x1)+1} chars"
                 else:
                     self.msg = f"Cut {abs(y2-y1)+1} lines"
+                self.run_linter()
         elif k == ord("y"):
             vr = self.cursor.get_visual_range()
             if vr:
@@ -292,6 +302,7 @@ class InputHandler:
                     self.msg = "Pasted clipboard"
                 self.cursor.visual_start = None
                 self.mode = "NORMAL"
+                self.run_linter()
         elif k == ord("h") or k == curses.KEY_LEFT:
             self.cursor.move_cursor(0, -1)
         elif k == ord("l") or k == curses.KEY_RIGHT:
@@ -308,6 +319,7 @@ class InputHandler:
             self.cursor.move_cursor(-1, 0)
         elif k == km.get("delete_key", curses.KEY_DC):
             self.buffer.delete_char(self.cursor.cy, self.cursor.cx)
+            self.run_linter()
         elif k == 27:
             self.mode = "NORMAL"
             self.cursor.visual_start = None
@@ -365,6 +377,10 @@ class InputHandler:
             self.cursor.cy = 0
             self.cursor.cx = 0
             self.msg = "Help opened"
+            return
+        if cmd_str == "lint":
+            self.run_linter()
+            self.msg = "Linter run"
             return
         if cmd_str.startswith("!"):
             import subprocess
@@ -454,3 +470,115 @@ Normal mode keys:
 Visual mode: d/y/p/h/j/k/l, PgUp/PgDn
 Insert mode: Esc to normal, arrows, PgUp/PgDn
 """
+
+    def run_linter(self):
+        import subprocess
+        import re
+        config_path = os.path.expanduser("~/.config/tedit.json")
+        linter_cmd = None
+        markdown_linter_cmd = None
+        if os.path.exists(config_path):
+            try:
+                with open(config_path) as f:
+                    cfg = json.load(f)
+                linter_cmd = cfg.get("linter_cmd")
+                markdown_linter_cmd = cfg.get("markdown_linter_cmd")
+            except Exception:
+                pass
+        diagnostics = {}
+        filetype = self.buffer.filename or ''
+        ext = os.path.splitext(filetype)[-1].lstrip('.') if filetype else ''
+        custom_linter = None
+        if hasattr(self.renderer, 'get_external_linter'):
+            custom_linter = self.renderer.get_external_linter(ext)
+        if custom_linter:
+            try:
+                diagnostics = custom_linter(self.buffer.lines, filetype)
+            except Exception as e:
+                self.msg = f"Custom linter error: {e}"
+        elif filetype.endswith('.py') and not linter_cmd:
+            try:
+                compile('\n'.join(self.buffer.lines) + '\n', '<string>', 'exec')
+            except SyntaxError as e:
+                lineno = getattr(e, 'lineno', 1) - 1
+                diagnostics.setdefault(lineno, []).append(("error", str(e)))
+            todo_re = re.compile(r"#.*(TODO|FIXME)", re.IGNORECASE)
+            for i, line in enumerate(self.buffer.lines):
+                for m in todo_re.finditer(line):
+                    kind = "todo" if "todo" in m.group(1).lower() else "warning"
+                    diagnostics.setdefault(i, []).append((kind, m.group(0)))
+        elif filetype.endswith('.md') or filetype.endswith('.markdown'):
+            cmd = markdown_linter_cmd or "markdownlint {file}"
+            if self.buffer.filename and os.path.exists(self.buffer.filename):
+                try:
+                    proc = subprocess.run(cmd.format(file=self.buffer.filename), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                    out = proc.stdout
+                    if out:
+                        for l in out.splitlines():
+                            m = re.match(r"([^:]+):(\d+) (MD\d+)(?:/(.*?))? (.*)", l)
+                            if m:
+                                lineno = int(m.group(2)) - 1
+                                rule = m.group(3)
+                                msg = m.group(5)
+                                diagnostics.setdefault(lineno, []).append(("error", f"{rule}: {msg}"))
+                            else:
+                                m2 = re.match(r".*:(\d+):(\d+): (error|warning|info): (.*)", l)
+                                if m2:
+                                    lineno = int(m2.group(1)) - 1
+                                    kind = m2.group(3)
+                                    msg = m2.group(4)
+                                    diagnostics.setdefault(lineno, []).append((kind, msg))
+                    else:
+                        if proc.returncode != 0:
+                            self.msg = f"Markdown linter error: {proc.stdout.strip()}"
+                        for i, line in enumerate(self.buffer.lines):
+                            if not line.strip():
+                                continue
+                            if not line.startswith('#') and not line.startswith(' '):
+                                diagnostics.setdefault(i, []).append(("info", "Not a heading or indented"))
+                        todo_re = re.compile(r"(TODO|FIXME)", re.IGNORECASE)
+                        for i, line in enumerate(self.buffer.lines):
+                            for m in todo_re.finditer(line):
+                                kind = "todo" if "todo" in m.group(1).lower() else "warning"
+                                diagnostics.setdefault(i, []).append((kind, m.group(0)))
+                except Exception as e:
+                    self.msg = f"Markdown linter error: {e}"
+                    for i, line in enumerate(self.buffer.lines):
+                        if not line.strip():
+                            continue
+                        if not line.startswith('#') and not line.startswith(' '):
+                            diagnostics.setdefault(i, []).append(("info", "Not a heading or indented"))
+                        todo_re = re.compile(r"(TODO|FIXME)", re.IGNORECASE)
+                        for i, line in enumerate(self.buffer.lines):
+                            for m in todo_re.finditer(line):
+                                kind = "todo" if "todo" in m.group(1).lower() else "warning"
+                                diagnostics.setdefault(i, []).append((kind, m.group(0)))
+            else:
+                for i, line in enumerate(self.buffer.lines):
+                    if not line.strip():
+                        continue
+                    if not line.startswith('#') and not line.startswith(' '):
+                        diagnostics.setdefault(i, []).append(("info", "Not a heading or indented"))
+                todo_re = re.compile(r"(TODO|FIXME)", re.IGNORECASE)
+                for i, line in enumerate(self.buffer.lines):
+                    for m in todo_re.finditer(line):
+                        kind = "todo" if "todo" in m.group(1).lower() else "warning"
+                        diagnostics.setdefault(i, []).append((kind, m.group(0)))
+        elif linter_cmd and self.buffer.filename:
+            try:
+                proc = subprocess.run(linter_cmd.format(file=self.buffer.filename), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                out = proc.stdout
+                if out:
+                    for l in out.splitlines():
+                        m = re.match(r".*:(\d+):(\d+): (error|warning|info): (.*)", l)
+                        if m:
+                            lineno = int(m.group(1)) - 1
+                            kind = m.group(3)
+                            msg = m.group(4)
+                            diagnostics.setdefault(lineno, []).append((kind, msg))
+                else:
+                    if proc.returncode != 0:
+                        self.msg = f"Linter error: {proc.stdout.strip()}"
+            except Exception as e:
+                self.msg = f"Linter error: {e}"
+        self.buffer.update_diagnostics(diagnostics)

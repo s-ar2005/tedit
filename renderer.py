@@ -18,6 +18,19 @@ class Renderer:
         self.refresh_files()
         self.show_line_numbers = True
         self.external_highlighters = {}
+        self.external_linters = {}
+        self.diagnostic_symbols = {
+            'error': 'E',
+            'warning': 'W',
+            'info': 'I',
+            'todo': 'T',
+        }
+        self.diagnostic_colors = {
+            'error': 6,
+            'warning': 7,
+            'info': 8,
+            'todo': 9,
+        }
         config_dir = os.path.expanduser("~/.config/tedit")
         if os.path.isdir(config_dir):
             for path in glob.glob(os.path.join(config_dir, "*.py")):
@@ -29,8 +42,20 @@ class Renderer:
                         spec.loader.exec_module(mod)
                         if hasattr(mod, "highlight_line"):
                             self.external_highlighters[ext] = mod.highlight_line
+                        if hasattr(mod, "lint_buffer"):
+                            self.external_linters[ext] = mod.lint_buffer
                     except Exception:
                         pass
+        config_path = os.path.expanduser("~/.config/tedit.json")
+        if os.path.exists(config_path):
+            try:
+                import json
+                with open(config_path) as f:
+                    cfg = json.load(f)
+                self.diagnostic_symbols.update(cfg.get("diagnostic_symbols", {}))
+                self.diagnostic_colors.update(cfg.get("diagnostic_colors", {}))
+            except Exception:
+                pass
 
     def set_theme(self, theme):
         self.theme = theme
@@ -46,12 +71,20 @@ class Renderer:
             curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLUE)
             curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_CYAN)
             curses.init_pair(5, curses.COLOR_WHITE, curses.COLOR_MAGENTA)
+            curses.init_pair(6, curses.COLOR_RED, curses.COLOR_WHITE)
+            curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_WHITE)
+            curses.init_pair(8, curses.COLOR_CYAN, curses.COLOR_WHITE)
+            curses.init_pair(9, curses.COLOR_GREEN, curses.COLOR_WHITE)
         else:
             curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
             curses.init_pair(2, curses.COLOR_CYAN, curses.COLOR_BLACK)
             curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_CYAN)
             curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_WHITE)
             curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_YELLOW)
+            curses.init_pair(6, curses.COLOR_RED, curses.COLOR_BLACK)
+            curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+            curses.init_pair(8, curses.COLOR_CYAN, curses.COLOR_BLACK)
+            curses.init_pair(9, curses.COLOR_GREEN, curses.COLOR_BLACK)
 
     def toggle_wrap(self):
         self.wrap = not self.wrap
@@ -84,10 +117,16 @@ class Renderer:
     def toggle_line_numbers(self):
         self.show_line_numbers = not self.show_line_numbers
 
-    def highlight_line(self, line, filetype):
+    def highlight_line(self, line, filetype, diagnostics=None):
         ext = None
         if filetype:
             ext = os.path.splitext(filetype)[-1].lstrip('.')
+        if diagnostics:
+            priority = {'error': 0, 'warning': 1, 'todo': 2, 'info': 3}
+            diagnostics.sort(key=lambda d: priority.get(d[0], 99))
+            dtype, _ = diagnostics[0]
+            color_code = self.diagnostic_colors.get(dtype, 1)
+            return f'\x05{color_code}\x06' + line + '\x02'
         if ext and ext in self.external_highlighters:
             try:
                 return self.external_highlighters[ext](line, filetype)
@@ -157,14 +196,31 @@ class Renderer:
                 break
             line = buffer.lines[i]
             filetype = buffer.filename or ''
+            diag = buffer.diagnostics.get(i, [])
             hline = self.highlight_line(line, filetype)
             idx = 0
             col = sidebar_width + (num_width if self.show_line_numbers else 0)
             color = curses.color_pair(1)
+            diagnostic_bg = None
+            if diag:
+                priority = {'error': 0, 'warning': 1, 'todo': 2, 'info': 3}
+                diag.sort(key=lambda d: priority.get(d[0], 99))
+                dtype, _ = diag[0]
+                diagnostic_bg = self.diagnostic_colors.get(dtype, 1)
+            diag_symbol = ''
+            diag_color = curses.color_pair(1)
+            if diag:
+                priority = {'error': 0, 'warning': 1, 'todo': 2, 'info': 3}
+                diag.sort(key=lambda d: priority.get(d[0], 99))
+                dtype, dmsg = diag[0]
+                diag_symbol = self.diagnostic_symbols.get(dtype, '?')
+                diag_color = curses.color_pair(self.diagnostic_colors.get(dtype, 1))
             if self.show_line_numbers:
                 num = f"{i+1:4} "
                 attr = curses.color_pair(5) if i == cursor.cy else curses.color_pair(1)
                 self.stdscr.addstr(i - cursor.scroll + y_offset, sidebar_width, num, attr)
+                if diag_symbol:
+                    self.stdscr.addstr(i - cursor.scroll + y_offset, sidebar_width + len(num), diag_symbol, diag_color)
             if self.wrap:
                 wrap_col = col
                 line_buffer = []
@@ -191,7 +247,13 @@ class Renderer:
                         idx += 1
                         continue
                     else:
-                        line_buffer.append((ch, color))
+                        if diagnostic_bg:
+                            fg = color & 0x0F
+                            bg = diagnostic_bg
+                            combined = curses.color_pair(fg) | curses.A_REVERSE if bg != 1 else color
+                            line_buffer.append((ch, combined))
+                        else:
+                            line_buffer.append((ch, color))
                         idx += 1
                 max_text_width = text_width - num_width
                 row = i - cursor.scroll + y_offset
@@ -235,7 +297,13 @@ class Renderer:
                     elif ch == '\x02':
                         color = curses.color_pair(1)
                     else:
-                        draw_color = curses.color_pair(5) if highlight else color
+                        if diagnostic_bg:
+                            fg = color & 0x0F
+                            bg = diagnostic_bg
+                            combined = curses.color_pair(fg) | curses.A_REVERSE if bg != 1 else color
+                            draw_color = curses.color_pair(5) if highlight else combined
+                        else:
+                            draw_color = curses.color_pair(5) if highlight else color
                         self.stdscr.addstr(i - cursor.scroll + y_offset, col_offset, ch, draw_color)
                         col_offset += 1
                     idx += 1
@@ -254,7 +322,13 @@ class Renderer:
                     self.stdscr.addstr(y + y_offset, minmap_x, ch, curses.color_pair(2 if ch == '|' else 1))
         modified = "*" if buffer.undo_stack else " "
         if draw_status:
+            diag_msgs = buffer.diagnostics.get(cursor.cy, [])
+            diag_text = ''
+            if diag_msgs:
+                diag_text = '; '.join(m for _, m in diag_msgs)
             status = f" {mode} | {modified}{buffer.filename or '[No Name]'} | Ln {cursor.cy + 1}, Col {cursor.cx + 1} | Buf {buf_idx+1}/{buf_count} {msg}"
+            if diag_text:
+                status += f" | {diag_text}"
             self.stdscr.addstr(maxy - 1, 0, status[:maxx - 1], curses.color_pair(3))
         if draw_cursor and focused:
             self.stdscr.move(cursor.cy - cursor.scroll + y_offset, sidebar_width + (num_width if self.show_line_numbers else 0) + (cursor.cx - cursor.scroll_x))
@@ -325,4 +399,8 @@ class Renderer:
         self.stdscr.addstr(maxy - 1, 0, prompt)
         s = self.stdscr.getstr(maxy - 1, len(prompt), 100).decode("utf-8")
         curses.noecho()
+
         return s
+
+    def get_external_linter(self, ext):
+        return self.external_linters.get(ext)
