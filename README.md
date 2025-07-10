@@ -119,7 +119,7 @@ python3 main.py <filename1> <filename2> ...
 
 You can customize all keyboard shortcuts by creating a JSON file at `~/.config/tedit.json` (preferred, global) or `keybindings.json` (local, project directory). If neither exists, built-in defaults are used.
 
-Example `~/.config/tedit.json`:
+**You can also control auto-save with the `autosave` option (off by default):**
 
 ```json
 {
@@ -146,9 +146,12 @@ Example `~/.config/tedit.json`:
   "f1": 265,
   "f2": 266,
   "f3": 267,
-  "delete_key": 330
+  "delete_key": 330,
+  "autosave": false // auto-save every 10 seconds
 }
 ```
+
+If `"autosave": true` is set, Tedit will automatically save all open files every 10 seconds. If omitted or set to false, auto-save is disabled.
 
 ---
 

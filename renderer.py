@@ -36,6 +36,7 @@ class Renderer:
         self.theme = theme
         self.setup_colors()
 
+
     def setup_colors(self):
         curses.start_color()
         curses.use_default_colors()
@@ -103,6 +104,10 @@ class Renderer:
         return line
 
     def draw(self, buffer, cursor, mode, msg, buf_idx=0, buf_count=1):
+        if self.theme == "light":
+            self.stdscr.bkgd(' ', curses.color_pair(1))
+        else:
+            self.stdscr.bkgd(' ', curses.color_pair(1))
         self.stdscr.clear()
         maxy, maxx = self.stdscr.getmaxyx()
         height, width = maxy - 1, maxx
@@ -255,6 +260,10 @@ class Renderer:
             self.stdscr.move(cursor.cy - cursor.scroll + y_offset, sidebar_width + (num_width if self.show_line_numbers else 0) + (cursor.cx - cursor.scroll_x))
 
     def draw_split(self, buffers, cursors, modes, msgs, split_mode, split_focus, split_buffers, buf_count):
+        if self.theme == "light":
+            self.stdscr.bkgd(' ', curses.color_pair(1))
+        else:
+            self.stdscr.bkgd(' ', curses.color_pair(1))
         self.stdscr.clear()
         maxy, maxx = self.stdscr.getmaxyx()
         sidebar_width = 20 if self.sidebar else 0

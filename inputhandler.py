@@ -64,10 +64,18 @@ class InputHandler:
         elif k == 10:
             prev_line = self.buffer.lines[self.cursor.cy]
             indent = len(prev_line) - len(prev_line.lstrip(' '))
+            extra = 0
+            dedent_keywords = ("return", "pass", "break", "continue", "raise", "elif", "else", "except", "finally")
+            prev_stripped = prev_line.strip()
+            if self.buffer.filename and self.buffer.filename.endswith('.py'):
+                if prev_stripped.endswith(":"):
+                    extra = 4
+                if prev_stripped == '' or prev_stripped.startswith('#') or any(prev_stripped.startswith(kw) for kw in dedent_keywords):
+                    indent = max(0, indent - 4)
             self.buffer.newline(self.cursor.cy, self.cursor.cx)
             self.cursor.cy += 1
-            self.cursor.cx = indent
-            self.buffer.lines[self.cursor.cy] = ' ' * indent + self.buffer.lines[self.cursor.cy]
+            self.cursor.cx = indent + extra
+            self.buffer.lines[self.cursor.cy] = ' ' * (indent + extra) + self.buffer.lines[self.cursor.cy]
         elif k == km.get("delete_key", curses.KEY_DC):
             self.buffer.delete_char(self.cursor.cy, self.cursor.cx)
         elif k == km.get("left", ord("h")) or k == curses.KEY_LEFT:
@@ -84,6 +92,12 @@ class InputHandler:
         elif k == km.get("page_down", curses.KEY_NPAGE):
             maxy, _ = self.renderer.stdscr.getmaxyx()
             self.cursor.move_cursor((maxy-1), 0)
+        elif k == km.get("tab", 9):
+            self.buffer.insert_char(ord(" "), self.cursor.cy, self.cursor.cx)
+            self.buffer.insert_char(ord(" "), self.cursor.cy, self.cursor.cx+1)
+            self.buffer.insert_char(ord(" "), self.cursor.cy, self.cursor.cx+2)
+            self.buffer.insert_char(ord(" "), self.cursor.cy, self.cursor.cx+3)
+            self.cursor.cx += 4
         elif 32 <= k <= 126:
             self.buffer.insert_char(k, self.cursor.cy, self.cursor.cx)
             self.cursor.cx += 1
@@ -92,6 +106,8 @@ class InputHandler:
             
     def handle_normal_mode(self, k):
         km = self.keymap
+        if k in (10, 13):
+            return
         if k == ord("m"):
             k2 = self.stdscr.getch()
             if 97 <= k2 <= 122:
@@ -223,7 +239,7 @@ class InputHandler:
             maxy, _ = self.renderer.stdscr.getmaxyx()
             self.cursor.move_cursor((maxy-1), 0)
         elif k == km.get("tab", 9):
-            pass
+            return ":switch_split"
         else:
             try:
                 self.msg = f"Unhandled {chr(k)}"
@@ -232,6 +248,8 @@ class InputHandler:
             
     def handle_visual_mode(self, k):
         km = self.keymap
+        if k in (10, 13):
+            return
         if k == ord("v"):
             self.mode = "NORMAL"
             self.cursor.visual_start = None

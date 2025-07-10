@@ -26,6 +26,15 @@ class Tedit:
         filenames = [a for a in args if not a.startswith('--')]
         self.session_path = os.path.expanduser("~/.config/tedit.session")
         self.last_autosave = time.time()
+        self.config = {}
+        config_path = os.path.expanduser("~/.config/tedit.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path) as f:
+                    self.config = json.load(f)
+            except Exception:
+                self.config = {}
+        self.autosave_enabled = self.config.get("autosave", False)
         if not os.path.exists(os.path.dirname(self.session_path)):
             os.makedirs(os.path.dirname(self.session_path), exist_ok=True)
         if not self.no_session and os.path.exists(self.session_path):
@@ -173,7 +182,8 @@ class Tedit:
                 self.renderer.draw(buf, cur, handler.mode, handler.msg, self.current, len(self.buffers))
                 handler.msg = ""
             k = self.stdscr.getch()
-            self.autosave()
+            if self.autosave_enabled:
+                self.autosave()
             if self.split_mode and k == 9:
                 self.split_focus = 1 - self.split_focus
                 continue
@@ -213,6 +223,10 @@ class Tedit:
                         if self.renderer.confirm_exit():
                             self.save_session()
                             break
+                    elif result == ":switch_split":
+                        if self.split_mode:
+                            self.split_focus = 1 - self.split_focus
+                        continue
             elif handler.mode == "VISUAL":
                 handler.handle_visual_mode(k)
 
