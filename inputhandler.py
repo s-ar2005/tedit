@@ -111,7 +111,7 @@ class InputHandler:
             
     def handle_normal_mode(self, k):
         km = self.keymap
-        if k in (10, 13):
+        if k in (10, 13) and not self.renderer.sidebar:
             return
         if k == ord("m"):
             k2 = self.stdscr.getch()
