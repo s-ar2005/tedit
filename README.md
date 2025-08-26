@@ -2,7 +2,7 @@
 
 > A fast, minimal, keyboard-driven terminal text editor. Inspired by Vim, built with pure Python.
 
-![screenshot](screenshot.jpg)
+![screenshot](screenshot.png)
 
 ---
 

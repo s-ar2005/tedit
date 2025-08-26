@@ -167,7 +167,7 @@ class Tedit:
                         curs = [self.cursors[bufidx0], self.cursors[bufidx1]]
                         handlers = [self.input_handlers[bufidx0], self.input_handlers[bufidx1]]
                         if hasattr(self.renderer, 'draw_split'):
-                            self.renderer.draw_split(bufs, curs, [h.mode for h in handlers], [h.msg for h in handlers], 'vsplit', self.split_focus, self.split_buffers, len(self.buffers))
+                            self.renderer.draw_split(bufs, curs, [h.mode for h in handlers], [h.msg for h in handlers], 'vsplit', self.split_focus, self.split_buffers, [b.filename for b in self.buffers])
                         for h in handlers:
                             h.msg = ""
                     else:
@@ -183,7 +183,7 @@ class Tedit:
                     self.renderer.draw(buf, cur, handler.mode, handler.msg, self.current, len(self.buffers))
                     handler.msg = ""
             else:
-                self.renderer.draw(buf, cur, handler.mode, handler.msg, self.current, len(self.buffers))
+                self.renderer.draw(buf, cur, handler.mode, handler.msg, self.current, [b.filename for b in self.buffers])
                 handler.msg = ""
             k = self.stdscr.getch()
             if self.autosave_enabled:
